@@ -28,6 +28,8 @@ import (
 
 const (
 	grpcMaxConcurrentStreams = 1000000
+	retryInterval            = 1 * time.Second
+	retryAmount              = 3
 )
 
 type EnvoyXdsServer struct {
@@ -141,9 +143,11 @@ func (envoyXdsServer *EnvoyXdsServer) SetSnapshotForCaches(caches *Caches, nodeI
 
 func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.Ingress, snapshotVersion string) {
 
+	// Start retrying until IsReady gives us the Ok, that means, that our config snapshot has been replicated to all
+	// the kourier gateways.
 	retries := 0
 	for {
-		if retries > 3 {
+		if retries >= retryAmount {
 			log.Errorf("Failed to mark latest snapshot as ready after %d retries", retries)
 			break
 		}
@@ -154,10 +158,11 @@ func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.I
 			break
 		}
 
+		// If we are inSync, exit the retry cicle
 		if inSync {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(retryInterval)
 		retries++
 	}
 }
