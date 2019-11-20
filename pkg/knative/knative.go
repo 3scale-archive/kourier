@@ -4,17 +4,13 @@ import (
 	"fmt"
 
 	"knative.dev/pkg/system"
-
-	"knative.dev/serving/pkg/client/clientset/versioned"
-
-	"knative.dev/serving/pkg/apis/networking"
 	networkingv1alpha1 "knative.dev/serving/pkg/apis/networking/v1alpha1"
+	"knative.dev/serving/pkg/client/clientset/versioned"
 )
 
 const (
-	internalServiceName     = "kourier-internal"
-	externalServiceName     = "kourier-external"
-	kourierIngressClassName = "kourier.ingress.networking.knative.dev"
+	internalServiceName = "kourier-internal"
+	externalServiceName = "kourier-external"
 )
 
 func MarkIngressReady(knativeClient versioned.Interface, ingress networkingv1alpha1.IngressAccessor) error {
@@ -67,22 +63,4 @@ func MarkIngressReady(knativeClient versioned.Interface, ingress networkingv1alp
 		}
 	}
 	return nil
-}
-
-func FilterByIngressClass(ingresses []*networkingv1alpha1.Ingress) []*networkingv1alpha1.Ingress {
-	var res []*networkingv1alpha1.Ingress
-
-	for _, ingress := range ingresses {
-		ingressClass := ingressClass(ingress)
-
-		if ingressClass == kourierIngressClassName {
-			res = append(res, ingress)
-		}
-	}
-
-	return res
-}
-
-func ingressClass(ingress *networkingv1alpha1.Ingress) string {
-	return ingress.GetObjectMeta().GetAnnotations()[networking.IngressClassAnnotationKey]
 }

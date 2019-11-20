@@ -3,11 +3,15 @@ package ingress
 import (
 	"context"
 	"kourier/pkg/envoy"
-	"kourier/pkg/knative"
 
 	"k8s.io/apimachinery/pkg/labels"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	"knative.dev/serving/pkg/apis/networking"
 	"knative.dev/serving/pkg/client/listers/networking/v1alpha1"
+)
+
+const (
+	kourierIngressClassName = "kourier.ingress.networking.knative.dev"
 )
 
 type Reconciler struct {
@@ -17,16 +21,16 @@ type Reconciler struct {
 }
 
 func (reconciler *Reconciler) Reconcile(ctx context.Context, key string) error {
-	ingressAccessors, err := reconciler.IngressLister.List(labels.Everything())
+	ingresses, err := reconciler.IngressLister.List(labels.SelectorFromSet(map[string]string{
+		networking.IngressClassAnnotationKey: kourierIngressClassName,
+	}))
 	if err != nil {
 		return err
 	}
 
-	kourierIngresses := knative.FilterByIngressClass(ingressAccessors)
-
 	reconciler.EnvoyXDSServer.SetSnapshotForIngresses(
 		nodeID,
-		kourierIngresses,
+		ingresses,
 		reconciler.EndpointsLister,
 	)
 
