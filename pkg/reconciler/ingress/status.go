@@ -77,11 +77,6 @@ type workItem struct {
 	hostname      string
 }
 
-// StatusManager provides a way to check if an ingress is ready
-type StatusManager interface {
-	IsReady(snapshotID string) (bool, error)
-}
-
 // StatusProber provides a way to check if an ingress is ready by probing the Envoy pods
 // managed by this controller and checking if those have the latest snapshot revision.
 type StatusProber struct {
