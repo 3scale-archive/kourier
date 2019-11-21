@@ -18,9 +18,7 @@ package ingress
 
 import (
 	"context"
-	"crypto/tls"
 	"kourier/pkg/config"
-	"net"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -46,14 +44,11 @@ import (
 
 const (
 	probeConcurrency          = 5
-	probeInterval             = 1 * time.Second
 	stateExpiration           = 5 * time.Minute
 	cleanupPeriod             = 1 * time.Minute
 	gatewayLabelSelectorKey   = "app"
 	gatewayLabelSelectorValue = "3scale-kourier-gateway"
 )
-
-var dialContext = (&net.Dialer{}).DialContext
 
 // snapshotState represents the probing progress at the Ingress scope
 type snapshotState struct {
@@ -82,13 +77,13 @@ type workItem struct {
 	hostname      string
 }
 
-// StatusManager provides a way to check if a VirtualService is ready
+// StatusManager provides a way to check if an ingress is ready
 type StatusManager interface {
 	IsReady(snapshotID string) (bool, error)
 }
 
-// StatusProber provides a way to check if a VirtualService is ready by probing the Envoy pods
-// handling that VirtualService.
+// StatusProber provides a way to check if an ingress is ready by probing the Envoy pods
+// managed by this controller and checking if those have the latest snapshot revision.
 type StatusProber struct {
 	logger *zap.SugaredLogger
 
@@ -126,11 +121,10 @@ func NewStatusProber(
 	}
 }
 
-// IsReady checks if the provided Ingress is ready, i.e. the Envoy pods serving the Ingress
-// have all been updated. This function is designed to be used by the Ingress controller, i.e. it
-// will be called in the order of reconciliation. This means that if IsReady is called on an Ingress,
-// this Ingress is the latest known version and therefore anything related to older versions can be ignored.
-// Also, it means that IsReady is not called concurrently.
+// IsReady checks if the provided Snapshot is replicated to all the Envoy pods managed by this control plane
+// This function is designed to be used by the Ingress controller, i.e. it  will be called in the order of reconciliation.
+// This means that if IsReady is called on a config change, with a set of ingresses that will be mark as ready if the
+// config has been properly replicated.
 func (m *StatusProber) IsReady(snapshotID string, Ingresses []*v1alpha1.Ingress) (bool, error) {
 
 	if ready, ok := func() (bool, bool) {
@@ -292,20 +286,11 @@ func (m *StatusProber) processWorkItem() bool {
 	}
 	m.logger.Infof("Processing probe for %s, IP: %s (depth: %d)", item.url, item.podIP, m.workQueue.Len())
 
+	// We disable keepalive to get the latest listener always, if not, we will be hitting the same old envoy listener
+	// and the internal path will always return the same snapshot ID.
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			// We only want to know that the Gateway is configured, not that the configuration is valid.
-			// Therefore, we can safely ignore any TLS certificate validation.
-			InsecureSkipVerify: true,
-		},
 		DisableKeepAlives: true,
-		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, e error) {
-			// Requests with the IP as hostname and the Host header set do no pass client-side validation
-			// because the HTTP client validates that the hostname (not the Host header) matches the server
-			// TLS certificate Common Name or Alternative Names. Therefore, http.Request.URL is set to the
-			// hostname and it is substituted it here with the target IP.
-			return dialContext(ctx, network, net.JoinHostPort(item.podIP, strconv.Itoa(int(config.HttpPortInternal))))
-		}}
+	}
 
 	ok, err := prober.Do(
 		item.podState.context,
