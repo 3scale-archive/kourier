@@ -220,6 +220,7 @@ func (m *StatusProber) IsReady(snapshotID string, Ingresses []*v1alpha1.Ingress)
 		m.workQueue.AddRateLimited(workItem)
 		m.logger.Infof("Queuing probe for %s, IP: %s (depth: %d)", workItem.url, workItem.podIP, m.workQueue.Len())
 	}
+
 	return len(workItems) == 0, nil
 }
 
@@ -249,11 +250,13 @@ func (m *StatusProber) CancelPodProbing(pod *corev1.Pod) {
 	defer m.mu.Unlock()
 	if state, ok := m.podStates[pod.Status.PodIP]; ok {
 		state.cancel()
+		delete(m.podStates, pod.Status.PodIP)
 	}
 }
 
 // expireOldStates removes the states that haven't been accessed in a while.
 func (m *StatusProber) expireOldStates() {
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for key, state := range m.snapshotStates {
@@ -315,6 +318,7 @@ func (m *StatusProber) processWorkItem() bool {
 }
 
 func (m *StatusProber) updateStates(snapshotState *snapshotState, podState *podState) {
+
 	if atomic.AddInt32(&podState.successCount, 1) == 1 {
 		// This is the first successful probe call for the pod, cancel all other work items for this pod
 		podState.cancel()
@@ -322,6 +326,22 @@ func (m *StatusProber) updateStates(snapshotState *snapshotState, podState *podS
 		// This is the last pod being successfully probed, the Ingress is ready
 		if atomic.AddInt32(&snapshotState.pendingCount, -1) == 0 {
 			m.readyCallback(snapshotState.id, snapshotState.ingresses)
+
+			// Let's remove the snapshotState as it's been marked ready and we don't use it anymore.
+			func() {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+				if _, ok := m.snapshotStates[snapshotState.id]; ok {
+					m.snapshotStates[snapshotState.id].cancel()
+					delete(m.snapshotStates, snapshotState.id)
+				}
+				//Cleanup pods.
+				for val, podState := range m.podStates {
+					podState.cancel()
+					delete(m.podStates, val)
+				}
+			}()
+
 		}
 	}
 }
