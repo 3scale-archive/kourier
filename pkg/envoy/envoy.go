@@ -3,8 +3,7 @@ package envoy
 import (
 	"context"
 	"fmt"
-	"kourier/pkg/knative"
-	"kourier/pkg/kubernetes"
+	"kourier/pkg/config"
 	"net"
 	"net/http"
 	"time"
@@ -12,8 +11,6 @@ import (
 	"knative.dev/pkg/tracker"
 
 	kubeclient "k8s.io/client-go/kubernetes"
-
-	v1 "k8s.io/api/core/v1"
 
 	"knative.dev/pkg/network"
 
@@ -41,6 +38,7 @@ type EnvoyXdsServer struct {
 	ctx            context.Context
 	server         xds.Server
 	snapshotCache  cache.SnapshotCache
+	statusManager  config.StatusManager
 }
 
 // Hasher returns node ID as an ID
@@ -54,7 +52,7 @@ func (h Hasher) ID(node *core.Node) string {
 	return node.Id
 }
 
-func NewEnvoyXdsServer(gatewayPort uint, managementPort uint, kubeClient kubeclient.Interface, knativeClient versioned.Interface) EnvoyXdsServer {
+func NewEnvoyXdsServer(gatewayPort uint, managementPort uint, kubeClient kubeclient.Interface, knativeClient versioned.Interface, statusManager config.StatusManager) EnvoyXdsServer {
 	ctx := context.Background()
 	snapshotCache := cache.NewSnapshotCache(true, Hasher{}, nil)
 	srv := xds.NewServer(ctx, snapshotCache, nil)
@@ -67,6 +65,7 @@ func NewEnvoyXdsServer(gatewayPort uint, managementPort uint, kubeClient kubecli
 		ctx:            ctx,
 		server:         srv,
 		snapshotCache:  snapshotCache,
+		statusManager:  statusManager,
 	}
 }
 
@@ -141,7 +140,6 @@ func (envoyXdsServer *EnvoyXdsServer) SetSnapshotForCaches(caches *Caches, nodeI
 }
 
 func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.Ingress, snapshotVersion string) {
-	gwPods, _ := kubernetes.GetKourierGatewayPODS(envoyXdsServer.kubeClient, v1.NamespaceAll)
 
 	retries := 0
 	for {
@@ -150,25 +148,16 @@ func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.I
 			break
 		}
 
-		inSync, err := kubernetes.CheckGatewaySnapshot(gwPods, snapshotVersion)
+		inSync, err := envoyXdsServer.statusManager.IsReady(snapshotVersion.String(), Ingresses)
 		if err != nil {
 			log.Error(err)
 			break
 		}
 
 		if inSync {
-			for _, ingress := range ingresses {
-				err := knative.MarkIngressReady(envoyXdsServer.knativeClient, ingress)
-				if err != nil {
-					log.Debug("Tried to mark an ingress as ready, but it no longer exists: ", err)
-					break
-				}
-			}
 			break
 		}
-
 		time.Sleep(1 * time.Second)
 		retries++
-
 	}
 }

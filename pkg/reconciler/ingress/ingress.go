@@ -4,6 +4,7 @@ import (
 	"context"
 	"kourier/pkg/config"
 	"kourier/pkg/envoy"
+	"kourier/pkg/knative"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -16,11 +17,13 @@ import (
 
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
 	endpointsinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/endpoints"
+	podinformer "knative.dev/pkg/client/injection/kube/informers/core/v1/pod"
 	"knative.dev/pkg/configmap"
 	"knative.dev/pkg/controller"
 	"knative.dev/pkg/logging"
 	"knative.dev/pkg/tracker"
 
+	"knative.dev/serving/pkg/apis/networking/v1alpha1"
 	knativeclient "knative.dev/serving/pkg/client/injection/client"
 	ingressinformer "knative.dev/serving/pkg/client/injection/informers/networking/v1alpha1/ingress"
 )
@@ -35,13 +38,26 @@ const (
 func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl {
 	kubernetesClient := kubeclient.Get(ctx)
 	knativeClient := knativeclient.Get(ctx)
+	podInformer := podinformer.Get(ctx)
 
+	readyCallback := func(snapshotID string, ingresses []*v1alpha1.Ingress) {
+		logger := logging.FromContext(ctx)
+		logger.Infof("Ingresses %#v are ready for snapshotid %s", ingresses, snapshotID)
+		for _, ingress := range ingresses {
+			_ = knative.MarkIngressReady(knativeClient, ingress)
+		}
+
+	}
+	statusProber := NewStatusProber(logging.FromContext(ctx), podInformer.Lister(), readyCallback)
 	envoyXdsServer := envoy.NewEnvoyXdsServer(
 		gatewayPort,
 		managementPort,
 		kubernetesClient,
 		knativeClient,
+		statusProber,
 	)
+	statusProber.Start(ctx.Done())
+
 	go envoyXdsServer.RunManagementServer()
 	go envoyXdsServer.RunGateway()
 
