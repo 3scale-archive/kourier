@@ -135,6 +135,7 @@ func (envoyXdsServer *EnvoyXdsServer) SetSnapshotForIngresses(nodeId string, Ing
 func (envoyXdsServer *EnvoyXdsServer) SetSnapshotForCaches(caches *Caches, nodeId string) {
 	err := envoyXdsServer.snapshotCache.SetSnapshot(nodeId, caches.ToEnvoySnapshot())
 
+	err := envoyXdsServer.snapshotCache.SetSnapshot(nodeId, snapshot)
 	if err != nil {
 		log.Error(err)
 		return
@@ -143,12 +144,17 @@ func (envoyXdsServer *EnvoyXdsServer) SetSnapshotForCaches(caches *Caches, nodeI
 
 func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.Ingress, snapshotVersion string) {
 
+	// We don't need to mark anything as ready, as there are no ingresses.
+	if len(Ingresses) == 0 {
+		return
+	}
+
 	// Start retrying until IsReady gives us the Ok, that means, that our config snapshot has been replicated to all
 	// the kourier gateways.
 	retries := 0
 	for {
 		if retries >= retryAmount {
-			log.Errorf("Failed to mark latest snapshot as ready after %d retries", retries)
+			log.Errorf("Failed to mark snapshot %s as ready after %d retries", snapshotVersion.String(), retries)
 			break
 		}
 
@@ -160,7 +166,7 @@ func (envoyXdsServer *EnvoyXdsServer) MarkIngressesReady(ingresses []*v1alpha1.I
 
 		// If we are inSync, exit the retry cicle
 		if inSync {
-			break
+			return
 		}
 		time.Sleep(retryInterval)
 		retries++
