@@ -41,8 +41,6 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 	podInformer := podinformer.Get(ctx)
 
 	readyCallback := func(snapshotID string, ingresses []*v1alpha1.Ingress) {
-		logger := logging.FromContext(ctx)
-		logger.Infof("Ingresses %#v are ready for snapshotid %s", ingresses, snapshotID)
 		for _, ingress := range ingresses {
 			_ = knative.MarkIngressReady(knativeClient, ingress)
 		}
@@ -56,6 +54,17 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 		knativeClient,
 		statusProber,
 	)
+
+	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		// Cancel probing when a Pod is deleted
+		DeleteFunc: func(obj interface{}) {
+			pod, ok := obj.(*v1.Pod)
+			if ok {
+				statusProber.CancelPodProbing(pod)
+			}
+		},
+	})
+
 	statusProber.Start(ctx.Done())
 
 	go envoyXdsServer.RunManagementServer()
