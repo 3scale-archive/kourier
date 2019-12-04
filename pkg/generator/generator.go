@@ -131,7 +131,6 @@ func addIngressToCaches(caches *Caches,
 
 				caches.AddCluster(&cluster, split.ServiceName, split.ServiceNamespace, path)
 
-				log.Infof("%#v", caches.clustersToIngress)
 				weightedCluster := envoy.NewWeightedCluster(split.ServiceName+path, uint32(split.Percent), headersSplit)
 
 				wrs = append(wrs, &weightedCluster)
