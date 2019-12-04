@@ -53,10 +53,12 @@ func (caches *Caches) AddIngress(ingress *v1alpha1.Ingress) {
 
 func (caches *Caches) DeleteIngress(ingressName, ingressNamespace string) {
 	delete(caches.ingresses, mapKey(ingressName, ingressNamespace))
+	delete(caches.clustersToIngress, mapKey(ingressName, ingressNamespace))
 }
 
 func (caches *Caches) AddCluster(cluster *v2.Cluster, serviceName string, serviceNamespace string, path string) {
 	caches.clusters.set(serviceName, path, serviceNamespace, cluster)
+	caches.addClustersForIngress(cluster, serviceName, serviceNamespace)
 }
 
 func (caches *Caches) AddRoute(route *route.Route, ingressName string, ingressNamespace string) {
@@ -66,7 +68,7 @@ func (caches *Caches) AddRoute(route *route.Route, ingressName string, ingressNa
 	caches.routesForIngress[key] = append(caches.routesForIngress[key], route.Name)
 }
 
-func (caches *Caches) AddClusterForIngress(cluster *v2.Cluster, ingressName string, ingressNamespace string) {
+func (caches *Caches) addClustersForIngress(cluster *v2.Cluster, ingressName string, ingressNamespace string) {
 	key := mapKey(ingressName, ingressNamespace)
 
 	caches.clustersToIngress[key] = append(
@@ -156,11 +158,14 @@ func (caches *Caches) ToEnvoySnapshot() cache.Snapshot {
 func (caches *Caches) DeleteIngressInfo(ingressName string, ingressNamespace string, kubeclient kubeclient.Interface) {
 	caches.deleteRoutesForIngress(ingressName, ingressNamespace)
 	caches.deleteMappingsForIngress(ingressName, ingressNamespace)
-	caches.DeleteIngress(ingressName, ingressNamespace)
+
+	// Set to expire all the clusters belonging to that Ingress.
 	clusters := caches.clustersToIngress[mapKey(ingressName, ingressNamespace)]
 	for _, cluster := range clusters {
 		caches.clusters.setExpiration(cluster)
 	}
+
+	caches.DeleteIngress(ingressName, ingressNamespace)
 
 	newExternalVirtualHosts := caches.externalVirtualHosts()
 	newClusterLocalVirtualHosts := caches.clusterLocalVirtualHosts()

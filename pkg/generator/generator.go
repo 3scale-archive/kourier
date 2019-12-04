@@ -130,7 +130,6 @@ func addIngressToCaches(caches *Caches,
 				cluster := envoy.NewCluster(split.ServiceName+path, connectTimeout, publicLbEndpoints, http2)
 
 				caches.AddCluster(&cluster, split.ServiceName, split.ServiceNamespace, path)
-				caches.AddClusterForIngress(&cluster, ingress.Name, ingress.Namespace)
 
 				log.Infof("%#v", caches.clustersToIngress)
 				weightedCluster := envoy.NewWeightedCluster(split.ServiceName+path, uint32(split.Percent), headersSplit)
