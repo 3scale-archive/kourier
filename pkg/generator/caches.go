@@ -27,6 +27,7 @@ type Caches struct {
 	externalVirtualHostsForIngress VHostsForIngresses
 	statusVirtualHost              *route.VirtualHost
 	routesForIngress               map[string][]string
+	clustersToIngress              map[string][]string
 }
 
 func NewCaches() Caches {
@@ -36,6 +37,7 @@ func NewCaches() Caches {
 		externalVirtualHostsForIngress: make(VHostsForIngresses),
 		routesForIngress:               make(map[string][]string),
 		ingresses:                      make(map[string]*v1alpha1.Ingress),
+		clustersToIngress:              make(map[string][]string),
 	}
 
 	return caches
@@ -62,6 +64,15 @@ func (caches *Caches) AddRoute(route *route.Route, ingressName string, ingressNa
 
 	key := mapKey(ingressName, ingressNamespace)
 	caches.routesForIngress[key] = append(caches.routesForIngress[key], route.Name)
+}
+
+func (caches *Caches) AddClusterForIngress(cluster *v2.Cluster, ingressName string, ingressNamespace string) {
+	key := mapKey(ingressName, ingressNamespace)
+
+	caches.clustersToIngress[key] = append(
+		caches.clustersToIngress[key],
+		cluster.Name,
+	)
 }
 
 func (caches *Caches) AddExternalVirtualHostForIngress(vHost *route.VirtualHost, ingressName string, ingressNamespace string) {
@@ -146,6 +157,10 @@ func (caches *Caches) DeleteIngressInfo(ingressName string, ingressNamespace str
 	caches.deleteRoutesForIngress(ingressName, ingressNamespace)
 	caches.deleteMappingsForIngress(ingressName, ingressNamespace)
 	caches.DeleteIngress(ingressName, ingressNamespace)
+	clusters := caches.clustersToIngress[mapKey(ingressName, ingressNamespace)]
+	for _, cluster := range clusters {
+		caches.clusters.setExpiration(cluster)
+	}
 
 	newExternalVirtualHosts := caches.externalVirtualHosts()
 	newClusterLocalVirtualHosts := caches.clusterLocalVirtualHosts()
