@@ -57,6 +57,7 @@ jobs:
       - run: wget https://dl.google.com/go/go1.13.1.linux-amd64.tar.gz -O /tmp/go1.13.1.linux-amd64.tar.gz
       - run: sudo tar -C /usr/local -xzf /tmp/go1.13.1.linux-amd64.tar.gz
       - run: wget -q -O - https://raw.githubusercontent.com/rancher/k3d/master/install.sh | bash
+      - run: sudo ufw disable
       - run: PATH=$PATH:/usr/local/go/bin make test
       - push-image-if-master
 
