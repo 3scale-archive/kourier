@@ -19,6 +19,8 @@ package generator
 import (
 	"kourier/pkg/envoy"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"go.uber.org/zap"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -53,20 +55,20 @@ func NewCaches(logger *zap.SugaredLogger) *Caches {
 	}
 }
 
-func (caches *Caches) GetIngress(ingressName, ingressNamespace string) *v1alpha1.Ingress {
-	caches.logger.Debugf("getting ingress: %s/%s", ingressName, ingressNamespace)
-	return caches.ingresses[mapKey(ingressName, ingressNamespace)]
+func (caches *Caches) GetIngress(ingressUID types.UID) *v1alpha1.Ingress {
+	//caches.logger.Debugf("getting ingress: %s/%s", ingressName, ingressNamespace)
+	return caches.ingresses[string(ingressUID)]
 }
 
 func (caches *Caches) AddTranslatedIngress(ingress *v1alpha1.Ingress, translatedIngress *translatedIngress) {
 	caches.logger.Debugf("adding ingress: %s/%s", ingress.Name, ingress.Namespace)
 
-	key := mapKey(ingress.Name, ingress.Namespace)
+	key := string(translatedIngress.ingressUID)
 	caches.ingresses[key] = ingress
 	caches.translatedIngresses[key] = translatedIngress
 
 	for _, cluster := range translatedIngress.clusters {
-		caches.AddClusterForIngress(cluster, ingress.Name, ingress.Namespace)
+		caches.AddClusterForIngress(cluster, translatedIngress.ingressUID)
 	}
 }
 
@@ -147,10 +149,9 @@ func (caches *Caches) ToEnvoySnapshot() (cache.Snapshot, error) {
 // Note: changes the snapshot version of the caches object
 // Notice that the clusters are not deleted. That's handled with the expiration
 // time set in the "ClustersCache" struct.
-func (caches *Caches) DeleteIngressInfo(ingressName string, ingressNamespace string,
-	kubeclient kubeclient.Interface) error {
+func (caches *Caches) DeleteIngressInfo(ingressUID types.UID, kubeclient kubeclient.Interface) error {
 	var err error
-	caches.deleteTranslatedIngress(ingressName, ingressNamespace)
+	caches.deleteTranslatedIngress(ingressUID)
 
 	newExternalVirtualHosts := caches.externalVirtualHosts()
 	newClusterLocalVirtualHosts := caches.clusterLocalVirtualHosts()
@@ -177,15 +178,15 @@ func (caches *Caches) DeleteIngressInfo(ingressName string, ingressNamespace str
 	return nil
 }
 
-func (caches *Caches) deleteTranslatedIngress(ingressName, ingressNamespace string) {
-	caches.logger.Debugf("deleting ingress: %s/%s", ingressName, ingressNamespace)
+func (caches *Caches) deleteTranslatedIngress(ingressUID types.UID) {
+	//caches.logger.Debugf("deleting ingress: %s/%s", ingressName, ingressNamespace)
 
-	key := mapKey(ingressName, ingressNamespace)
+	key := string(ingressUID)
 
 	// Set to expire all the clusters belonging to that Ingress.
 	clusters := caches.clustersToIngress[key]
 	for _, cluster := range clusters {
-		caches.clusters.setExpiration(cluster, ingressName, ingressNamespace)
+		caches.clusters.setExpiration(cluster, ingressUID)
 	}
 
 	delete(caches.ingresses, key)
@@ -193,12 +194,12 @@ func (caches *Caches) deleteTranslatedIngress(ingressName, ingressNamespace stri
 	delete(caches.clustersToIngress, key)
 }
 
-func (caches *Caches) AddClusterForIngress(cluster *v2.Cluster, ingressName string, ingressNamespace string) {
-	caches.logger.Debugf("adding cluster %s for ingress %s/%s", cluster.Name, ingressName, ingressNamespace)
+func (caches *Caches) AddClusterForIngress(cluster *v2.Cluster, ingressUID types.UID) {
+	//caches.logger.Debugf("adding cluster %s for ingress %s/%s", cluster.Name, ingressName, ingressNamespace)
 
-	caches.clusters.set(cluster, ingressName, ingressNamespace)
+	caches.clusters.set(cluster, ingressUID)
 
-	key := mapKey(ingressName, ingressNamespace)
+	key := string(ingressUID)
 	caches.clustersToIngress[key] = append(
 		caches.clustersToIngress[key],
 		cluster.Name,
@@ -245,6 +246,8 @@ func (caches *Caches) sniMatches() []*envoy.SNIMatch {
 	return res
 }
 
+/*
 func mapKey(ingressName string, ingressNamespace string) string {
 	return ingressNamespace + "/" + ingressName
 }
+*/

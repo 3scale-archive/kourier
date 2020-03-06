@@ -105,7 +105,7 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 
 	readyCallback := func(ing *v1alpha1.Ingress) {
 		logger.Debugf("Ready callback triggered for ingress: %s/%s", ing.Namespace, ing.Name)
-		impl.EnqueueKey(types.NamespacedName{Namespace: ing.Namespace, Name: ing.Name})
+		impl.EnqueueKey(enqueueKey(ing))
 	}
 
 	statusProber := NewStatusProber(
@@ -131,6 +131,7 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 		}
 	}()
 
+	// TODO: This depends on the format of the caching key
 	c.CurrentCaches.SetOnEvicted(func(key string, value interface{}) {
 		// The format of the key received is "clusterName:ingressName:ingressNamespace"
 		logger.Debugf("Evicted %s", key)
@@ -175,7 +176,10 @@ func NewController(ctx context.Context, cmw configmap.Watcher) *controller.Impl 
 		FilterFunc: reconciler.AnnotationFilterFunc(
 			networking.IngressClassAnnotationKey, config.KourierIngressClassName, false,
 		),
-		Handler: controller.HandleAll(impl.Enqueue),
+		Handler: controller.HandleAll(func(object interface{}) {
+			ingress := object.(*v1alpha1.Ingress)
+			impl.EnqueueKey(enqueueKey(ingress))
+		}),
 	}
 
 	ingressInformer.Informer().AddEventHandler(ingressInformerHandler)
@@ -211,7 +215,7 @@ func addExtAuthz(caches *generator.Caches) envoy.ExternalAuthzConfig {
 		cluster := extAuthZConfig.GetExtAuthzCluster()
 		// This is a special case, as this cluster is not related to an ingress,
 		// The Ingress Name and Ingress Namespace are not really used.
-		caches.AddClusterForIngress(cluster, "__extAuthZCluster", "_internal")
+		caches.AddClusterForIngress(cluster, "__extAuthZCluster_internal")
 	}
 	return extAuthZConfig
 }
@@ -219,4 +223,11 @@ func addExtAuthz(caches *generator.Caches) envoy.ExternalAuthzConfig {
 func ingressNotReady(obj interface{}) bool {
 	ingress := obj.(*v1alpha1.Ingress)
 	return !ingress.Status.IsReady()
+}
+
+func enqueueKey(ingress *v1alpha1.Ingress) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: ingress.Namespace,
+		Name:      ingress.Name + "+" + string(ingress.UID),
+	}
 }

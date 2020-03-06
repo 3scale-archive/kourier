@@ -40,6 +40,8 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	"go.uber.org/zap"
 
 	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -69,13 +71,13 @@ func newClustersCacheWithExpAndCleanupIntervals(expiration time.Duration, cleanu
 	return &ClustersCache{clusters: goCache, logger: logger}
 }
 
-func (cc *ClustersCache) set(cluster *v2.Cluster, ingressName string, ingressNamespace string) {
-	key := key(cluster.Name, ingressName, ingressNamespace)
+func (cc *ClustersCache) set(cluster *v2.Cluster, ingressUID types.UID) {
+	key := key(cluster.Name, ingressUID)
 	cc.clusters.Set(key, cluster, defaultExpiration)
 }
 
-func (cc *ClustersCache) setExpiration(clusterName string, ingressName string, ingressNamespace string) {
-	key := key(clusterName, ingressName, ingressNamespace)
+func (cc *ClustersCache) setExpiration(clusterName string, ingressUID types.UID) {
+	key := key(clusterName, ingressUID)
 	if cluster, ok := cc.clusters.Get(key); ok {
 		cc.clusters.Set(key, cluster, clusterExpiration)
 	}
@@ -95,6 +97,6 @@ func (cc *ClustersCache) list() []envoycache.Resource {
 
 // Using only the cluster name is not enough to ensure uniqueness, that's why we
 // use also the ingress info.
-func key(clusterName, ingressName, ingressNamespace string) string {
-	return strings.Join([]string{clusterName, ingressName, ingressNamespace}, ":")
+func key(clusterName string, ingressUID types.UID) string {
+	return strings.Join([]string{clusterName, string(ingressUID)}, ":")
 }

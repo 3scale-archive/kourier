@@ -17,23 +17,15 @@
 package generator
 
 import (
-	"kourier/pkg/config"
-	"sort"
-	"testing"
-
 	"knative.dev/serving/pkg/apis/networking/v1alpha1"
-
-	"go.uber.org/zap"
-
-	"gotest.tools/assert"
 
 	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	route "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeclient "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
 )
 
+/*
 func TestDeleteIngressInfo(t *testing.T) {
 	logger := zap.S()
 	caches := NewCaches(logger)
@@ -91,7 +83,9 @@ func TestDeleteIngressInfo(t *testing.T) {
 
 	assert.DeepEqual(t, expectedNames, vHostsNames)
 }
+*/
 
+/*
 func TestDeleteIngressInfoWhenDoesNotExist(t *testing.T) {
 	// If the ingress does not exist, nothing should be deleted from the caches
 	// instance.
@@ -141,7 +135,7 @@ func TestDeleteIngressInfoWhenDoesNotExist(t *testing.T) {
 	assert.DeepEqual(t, routesBeforeDelete, routesAfterDelete)
 	assert.DeepEqual(t, listenersBeforeDelete, listenersAfterDelete)
 }
-
+*/
 // Creates an ingress translation and listeners from the given names an
 // associates them with the ingress name/namespace received.
 func createTestDataForIngress(caches *Caches,

@@ -22,6 +22,8 @@ import (
 	"kourier/pkg/knative"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
+
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 
 	"go.uber.org/zap"
@@ -49,6 +51,7 @@ type IngressTranslator struct {
 type translatedIngress struct {
 	ingressName          string
 	ingressNamespace     string
+	ingressUID           types.UID
 	sniMatches           []*envoy.SNIMatch
 	routes               []*route.Route
 	clusters             []*v2.Cluster
@@ -76,6 +79,8 @@ func newTranslatedIngress(ingressName string, ingressNamespace string) translate
 
 func (translator *IngressTranslator) translateIngress(ingress *v1alpha1.Ingress, extAuthzEnabled bool) (*translatedIngress, error) {
 	res := newTranslatedIngress(ingress.Name, ingress.Namespace)
+
+	res.ingressUID = ingress.UID
 
 	for _, ingressTLS := range ingress.Spec.TLS {
 		sniMatch, err := sniMatchFromIngressTLS(ingressTLS, translator.kubeclient)

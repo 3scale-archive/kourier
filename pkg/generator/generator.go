@@ -44,7 +44,7 @@ const (
 // For now, when updating the info for an ingress we delete it, and then
 // regenerate it. We can optimize this later.
 func UpdateInfoForIngress(caches *Caches, ingress *v1alpha1.Ingress, kubeclient kubeclient.Interface, translator *IngressTranslator, logger *zap.SugaredLogger, extAuthzEnabled bool) error {
-	if err := caches.DeleteIngressInfo(ingress.Name, ingress.Namespace, kubeclient); err != nil {
+	if err := caches.DeleteIngressInfo(ingress.UID, kubeclient); err != nil {
 		return err
 	}
 

@@ -23,6 +23,9 @@ import (
 	"kourier/pkg/generator"
 	"kourier/pkg/knative"
 	"reflect"
+	"strings"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"go.uber.org/zap"
 
@@ -30,7 +33,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	kubeclient "k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	knativeclient "knative.dev/serving/pkg/client/clientset/versioned"
 	nv1alpha1lister "knative.dev/serving/pkg/client/listers/networking/v1alpha1"
 )
@@ -48,15 +50,27 @@ type Reconciler struct {
 }
 
 func (reconciler *Reconciler) Reconcile(ctx context.Context, key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		return err
-	}
-	reconciler.logger.Infof("Got reconcile request for %s namespace: %s", name, namespace)
+	reconciler.logger.Infof("KEY: ", key)
+
+	/*
+		namespace, name, err := cache.SplitMetaNamespaceKey(key)
+		if err != nil {
+			return err
+		}
+		reconciler.logger.Infof("Got reconcile request for %s namespace: %s", name, namespace)
+
+	*/
+
+	keyParts := strings.Split(key, "/")
+	namespace := keyParts[0]
+
+	nameAndUID := strings.Split(keyParts[1], "+")
+	name := nameAndUID[0]
+	ingressUID := nameAndUID[1]
 
 	original, err := reconciler.IngressLister.Ingresses(namespace).Get(name)
 	if apierrors.IsNotFound(err) {
-		return reconciler.deleteIngress(namespace, name)
+		return reconciler.deleteIngress(types.UID(ingressUID))
 	} else if err != nil {
 		return err
 	}
@@ -70,9 +84,9 @@ func (reconciler *Reconciler) Reconcile(ctx context.Context, key string) error {
 	return reconciler.updateStatus(original, ingress)
 }
 
-func (reconciler *Reconciler) deleteIngress(namespace, name string) error {
-	reconciler.logger.Infof("Deleting Ingress %s namespace: %s", name, namespace)
-	ingress := reconciler.CurrentCaches.GetIngress(name, namespace)
+func (reconciler *Reconciler) deleteIngress(ingressUID types.UID) error {
+	//reconciler.logger.Infof("Deleting Ingress %s namespace: %s", name, namespace)
+	ingress := reconciler.CurrentCaches.GetIngress(ingressUID)
 
 	// We need to check for ingress not being nil, because we can receive an event from an already
 	// removed ingress, like for example, when the endpoints object for that ingress is updated/removed.
@@ -80,7 +94,7 @@ func (reconciler *Reconciler) deleteIngress(namespace, name string) error {
 		reconciler.statusManager.CancelIngress(ingress)
 	}
 
-	err := reconciler.CurrentCaches.DeleteIngressInfo(name, namespace, reconciler.kubeClient)
+	err := reconciler.CurrentCaches.DeleteIngressInfo(ingressUID, reconciler.kubeClient)
 	if err != nil {
 		return err
 	}
