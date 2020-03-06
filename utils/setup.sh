@@ -31,7 +31,7 @@ k3d import-images 3scale-kourier:"$tag" --name='kourier-integration'
 k3d import-images 3scale-kourier-gateway:"$tag" --name='kourier-integration'
 k3d import-images test_externalauthz:test --name='kourier-integration'
 
-KNATIVE_VERSION=v0.11.1
+KNATIVE_VERSION=v0.12.1
 # Deploys kourier and patches it.
 kubectl apply -f https://github.com/knative/serving/releases/download/${KNATIVE_VERSION}/serving-crds.yaml
 kubectl apply -f https://github.com/knative/serving/releases/download/${KNATIVE_VERSION}/serving-core.yaml
