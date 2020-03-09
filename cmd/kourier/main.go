@@ -19,6 +19,9 @@ package main
 import (
 	kourierIngressController "kourier/pkg/reconciler/ingress"
 	"os"
+	"time"
+
+	"knative.dev/pkg/signals"
 
 	"knative.dev/pkg/controller"
 
@@ -27,6 +30,8 @@ import (
 	// This defines the shared main for injected controllers.
 	"knative.dev/pkg/injection/sharedmain"
 )
+
+const resyncPeriod = time.Second * 30
 
 func init() {
 	// Log as JSON instead of the default ASCII formatter.
@@ -44,9 +49,10 @@ func main() {
 	// TODO: make this configurable
 	_ = os.Setenv("METRICS_DOMAIN", "knative.dev/samples")
 
+	ctx := signals.NewContext()
 	// The controller by defaults uses 2 threads, but our reconcile logic doesn't support it yet
 	// TODO: Improve reconcile to support multiple threads
 	controller.DefaultThreadsPerController = 1
-
-	sharedmain.Main("KourierIngressController", kourierIngressController.NewController)
+	ctx = controller.WithResyncPeriod(ctx, resyncPeriod)
+	sharedmain.MainWithContext(ctx, "KourierIngressController", kourierIngressController.NewController)
 }
